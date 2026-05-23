@@ -296,21 +296,21 @@ Reserva-de-salas/
 
 ## Etapa 2 — Spring Security
 
-Autenticação HTTP Basic com dois perfis de acesso:
+Autenticação via **JWT Bearer Token** com dois perfis de acesso:
 
 | Role | Permissões |
 |------|-----------|
 | `ADMIN` | Gerenciar usuários, salas e reservas |
 | `USER` | Criar e cancelar reservas; listar salas e reservas |
 
-| Usuário | Senha | Role |
-|---------|-------|------|
-| `admin` | `admin123` | ADMIN |
-| `user` | `user123` | USER |
+**Fluxo de autenticação:**
+1. `POST /api/v1/auth/login` com `{ "email": "...", "senha": "..." }` → retorna JWT
+2. Usar o token em todas as requisições protegidas: `Authorization: Bearer <token>`
+3. `POST /api/v1/auth/logout` invalida o token (blocklist em memória)
 
 | Código | Significado |
 |--------|-------------|
-| `401` | Não autenticado |
+| `401` | Não autenticado (sem token ou token inválido) |
 | `403` | Sem permissão para a operação |
 
 **ADMIN criando sala — 201 Created:**
@@ -411,11 +411,13 @@ Testcontainers sobe containers reais durante os testes:
 
 ![DELETE reserva 204](img/swagger-delete-reserva-204.png)
 
-**Pipeline CI** (`.github/workflows/ci.yml`) — roda a cada push em `main` e `develop`:
+**Pipeline CI** (`.github/workflows/ci.yml`) — roda a cada push em `main`, `develop` e `dev`:
 
 ```
-Push → Build → Testes → Package → Upload JARs
+Push → Build → Testes unitários → Testes de integração (Docker) → Package → Upload JARs
 ```
+
+> Os testes de integração usam Testcontainers e só rodam no CI (variável `CI=true`). Localmente são ignorados automaticamente.
 
 ---
 
@@ -431,17 +433,25 @@ Push → Build → Testes → Package → Upload JARs
 | `PUT` | `/api/v1/salas/{id}` | ADMIN | `200` / `422` |
 | `DELETE` | `/api/v1/salas/{id}` | ADMIN | `204` / `404` |
 
+### Autenticação — `user-service` (8081)
+
+| Método | Rota | Auth | Status |
+|--------|------|------|--------|
+| `POST` | `/api/v1/auth/login` | Pública | `200` / `401` |
+| `POST` | `/api/v1/auth/2fa` | Pública (pré-auth token) | `200` / `400` / `401` |
+| `POST` | `/api/v1/auth/logout` | Bearer | `204` |
+
 ### Usuários — `user-service` (8081)
 
 | Método | Rota | Auth | Status |
 |--------|------|------|--------|
 | `GET` | `/api/v1/usuarios` | ADMIN | `200` |
 | `GET` | `/api/v1/usuarios/{id}` | ADMIN | `200` / `404` |
-| `POST` | `/api/v1/usuarios` | ADMIN | `201` / `422` |
-| `PUT` | `/api/v1/usuarios/{id}` | ADMIN | `200` / `422` |
+| `POST` | `/api/v1/usuarios` | ADMIN | `201` / `400` |
+| `PUT` | `/api/v1/usuarios/{id}` | ADMIN | `200` / `404` |
 | `DELETE` | `/api/v1/usuarios/{id}` | ADMIN | `204` / `404` |
 | `POST` | `/api/v1/usuarios/{id}/2fa/setup` | ADMIN | `200` |
-| `POST` | `/api/v1/usuarios/{id}/2fa/ativar` | ADMIN | `200` / `422` |
+| `POST` | `/api/v1/usuarios/{id}/2fa/ativar` | ADMIN | `200` |
 | `POST` | `/api/v1/usuarios/{id}/2fa/verificar` | ADMIN | `200` / `401` |
 
 ### Reservas — `booking-service` (8083)
@@ -494,27 +504,34 @@ Via Swagger UI: http://localhost:8081/swagger-ui.html (ou 8082/8083)
 Via curl:
 
 ```bash
-# Criar usuário
-curl -X POST http://localhost:8081/api/v1/usuarios \
-  -u admin:admin123 \
+# 1. Fazer login e obter o token JWT
+TOKEN=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"nome":"Joao Silva","email":"joao@email.com"}'
+  -d '{"email":"admin@reserva.com","senha":"admin123"}' | jq -r '.token')
 
-# Criar sala
+# 2. Criar usuário (ADMIN)
+curl -X POST http://localhost:8081/api/v1/usuarios \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"nome":"Joao Silva","email":"joao@email.com","senha":"senha123","role":"USER"}'
+
+# 3. Criar sala (ADMIN)
 curl -X POST http://localhost:8082/api/v1/salas \
-  -u admin:admin123 \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"nome":"Sala A","capacidade":10,"ativa":true}'
 
-# Criar reserva
+# 4. Criar reserva (USER ou ADMIN)
 curl -X POST http://localhost:8083/api/v1/reservas \
-  -u user:user123 \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"salaId":1,"usuarioId":1,"inicio":"2025-08-01T09:00:00","fim":"2025-08-01T10:00:00"}'
 ```
 
 ### 4. Rodar testes de integração
 
+Os testes de integração requerem Docker e só rodam quando a variável `CI=true` está definida (configuração automática no GitHub Actions). Para rodar localmente com Docker disponível:
+
 ```bash
-cd booking-service && mvn test
+CI=true mvn test -pl booking-service
 ```

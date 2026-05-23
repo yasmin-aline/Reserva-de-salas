@@ -12,10 +12,13 @@ public class UsuarioDTO {
     private Long id;
     private String nome;
     private String email;
+    private String senha;
+    private String role;
 
     public UsuarioDTO(Usuario usuario) {
         this.id = usuario.getId();
         this.nome = usuario.getNome();
         this.email = usuario.getEmail();
+        this.role = usuario.getRole();
     }
 }

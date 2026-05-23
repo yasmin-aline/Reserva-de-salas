@@ -1,33 +1,38 @@
 package br.com.alura.room.config;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Autowired
-    private Environment env;
+    @Value("${jwt.secret}")
+    private String jwtSecret;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(
                     "/swagger-ui/**", "/swagger-ui.html",
@@ -39,37 +44,41 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/salas/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
-            .httpBasic(Customizer.withDefaults())
-            .exceptionHandling(exceptions -> exceptions
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .decoder(jwtDecoder())
+                    .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                )
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(401);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"erro\": \"Não autenticado. Faça login para continuar.\"}");
                 })
+            )
+            .exceptionHandling(exceptions -> exceptions
                 .accessDeniedHandler((request, response, accessDeniedException) -> {
                     response.setStatus(403);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"erro\": \"Acesso negado. Você não tem permissão para realizar esta operação.\"}");
                 })
             );
-
         return http.build();
     }
 
     @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails user = User.withDefaultPasswordEncoder()
-            .username("user")
-            .password(env.getProperty("APP_USER_PASSWORD", "user123"))
-            .roles("USER")
-            .build();
+    public JwtDecoder jwtDecoder() {
+        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(key).build();
+    }
 
-        UserDetails admin = User.withDefaultPasswordEncoder()
-            .username("admin")
-            .password(env.getProperty("APP_ADMIN_PASSWORD", "admin123"))
-            .roles("ADMIN")
-            .build();
-
-        return new InMemoryUserDetailsManager(user, admin);
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            String role = jwt.getClaimAsString("role");
+            if (role == null) return List.of();
+            return List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        });
+        return converter;
     }
 }
