@@ -111,11 +111,11 @@ class ReservaIntegrationTest {
     @Test
     @DisplayName("POST /reservas sem token → 401")
     void deveRetornar401SemToken() {
-        // Enviamos sem corpo para evitar streaming mode do HttpURLConnection;
-        // o filtro de segurança retorna 401 antes de processar qualquer body.
         ResponseEntity<String> resp = restTemplate.postForEntity(
                 "/api/v1/reservas",
-                null,
+                new HttpEntity<>(dto(1L, 1L,
+                        LocalDateTime.now().plusDays(1),
+                        LocalDateTime.now().plusDays(1).plusHours(1))),
                 String.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
