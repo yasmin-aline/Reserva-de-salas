@@ -1,6 +1,7 @@
 package br.com.alura.user.config;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
@@ -15,10 +16,11 @@ import org.springframework.context.annotation.Configuration;
     )
 )
 @SecurityScheme(
-    name        = "basicAuth",
+    name        = "bearerAuth",
     type        = SecuritySchemeType.HTTP,
-    scheme      = "basic",
-    description = "Use admin:admin123 (todos os endpoints requerem ADMIN)"
+    scheme      = "bearer",
+    bearerFormat = "JWT",
+    in          = SecuritySchemeIn.HEADER,
+    description = "Informe o JWT obtido em POST /api/v1/auth/login"
 )
 public class OpenApiConfig {}
-

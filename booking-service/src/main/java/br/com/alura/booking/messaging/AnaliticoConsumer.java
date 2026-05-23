@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class AnaliticoConsumer {
@@ -17,6 +18,7 @@ public class AnaliticoConsumer {
 
     private final Set<String> eventosProcessados =
             Collections.synchronizedSet(new HashSet<>());
+    private final AtomicInteger processedCount = new AtomicInteger(0);
 
     @KafkaListener(
         topics  = "${reserva.kafka.topic}",
@@ -28,7 +30,15 @@ public class AnaliticoConsumer {
             return;
         }
         eventosProcessados.add(event.getEventId());
+        processedCount.incrementAndGet();
         log.info("[ANALYTICS] ReservaRegistrada: reservaId={}, salaId={}, usuarioId={}",
                 event.getReservaId(), event.getSalaId(), event.getUsuarioId());
+    }
+
+    public int getProcessedCount() { return processedCount.get(); }
+
+    public void resetCounters() {
+        processedCount.set(0);
+        eventosProcessados.clear();
     }
 }

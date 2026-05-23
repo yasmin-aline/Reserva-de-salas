@@ -5,6 +5,7 @@ import br.com.alura.user.exception.RegraDeNegocioException;
 import br.com.alura.user.model.Usuario;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import br.com.alura.user.repository.UsuarioRepository;
@@ -13,9 +14,11 @@ import br.com.alura.user.repository.UsuarioRepository;
 public class UsuarioService {
 
     private final UsuarioRepository repository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UsuarioService(UsuarioRepository repository) {
+    public UsuarioService(UsuarioRepository repository, PasswordEncoder passwordEncoder) {
         this.repository = repository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public Page<UsuarioDTO> listar(Pageable paginacao) {
@@ -33,7 +36,11 @@ public class UsuarioService {
         Usuario usuario = new Usuario();
         usuario.setNome(dto.getNome());
         usuario.setEmail(dto.getEmail());
-        
+        if (dto.getSenha() != null && !dto.getSenha().isBlank()) {
+            usuario.setSenha(passwordEncoder.encode(dto.getSenha()));
+        }
+        usuario.setRole(dto.getRole() != null ? dto.getRole() : "USER");
+
         Usuario salvo = repository.save(usuario);
         return new UsuarioDTO(salvo);
     }
@@ -42,10 +49,16 @@ public class UsuarioService {
     public UsuarioDTO atualizar(Long id, UsuarioDTO dto) {
         Usuario usuario = repository.findById(id)
                 .orElseThrow(() -> new RegraDeNegocioException("Usuário com ID " + id + " não encontrado."));
-        
+
         usuario.setNome(dto.getNome());
         usuario.setEmail(dto.getEmail());
-        
+        if (dto.getSenha() != null && !dto.getSenha().isBlank()) {
+            usuario.setSenha(passwordEncoder.encode(dto.getSenha()));
+        }
+        if (dto.getRole() != null) {
+            usuario.setRole(dto.getRole());
+        }
+
         return new UsuarioDTO(usuario);
     }
 

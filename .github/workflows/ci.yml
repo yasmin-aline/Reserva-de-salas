@@ -2,7 +2,7 @@ name: CI — Build, Test & Package
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, dev ]
   pull_request:
     branches: [ main ]
 
@@ -30,8 +30,11 @@ jobs:
       - name: Testes — room-service
         run: mvn -B test -pl room-service --no-transfer-progress
 
-      - name: Testes — booking-service
-        run: mvn -B test -pl booking-service --no-transfer-progress
+      - name: Testes unitários — booking-service
+        run: mvn -B test -pl booking-service -Dtest="!ReservaIntegrationTest" --no-transfer-progress
+
+      - name: Testes de integração — booking-service (requer Docker)
+        run: mvn -B test -pl booking-service -Dtest=ReservaIntegrationTest --no-transfer-progress
 
       - name: Package — gerar JARs
         run: mvn -B package -DskipTests --no-transfer-progress
