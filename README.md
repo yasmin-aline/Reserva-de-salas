@@ -535,3 +535,52 @@ Os testes de integração requerem Docker e só rodam quando a variável `CI=tru
 ```bash
 CI=true mvn test -pl booking-service
 ```
+
+----
+
+### Diagrama de Casos de Uso 
+
+```mermaid
+flowchart TD
+    ADMIN(["ADMIN"])
+    USER(["USER"])
+
+    subgraph auth["Autenticacao"]
+        direction LR
+        UC01("Login JWT")
+        UC02("Configurar 2FA")
+        UC03("Logout")
+    end
+
+    subgraph admin_only["Exclusivo ADMIN"]
+        direction LR
+        UC04("Gerenciar usuarios")
+        UC05("Gerenciar salas")
+    end
+
+    subgraph reservas["Reservas"]
+        direction LR
+        UC06("Criar reserva")
+        UC07("Cancelar reserva")
+        UC08("Consultar reservas")
+    end
+
+    subgraph sistema["Sistema — automatico"]
+        direction LR
+        UC09("Publicar evento\nRabbitMQ + Kafka")
+        UC10("Validar token JWT")
+    end
+
+    ADMIN --> auth
+    ADMIN --> admin_only
+    ADMIN --> reservas
+
+    USER --> UC01
+    USER --> UC03
+    USER --> reservas
+
+    UC06 -.->|include| UC09
+    UC06 -.->|include| UC10
+```
+
+-----
