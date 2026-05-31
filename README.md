@@ -387,9 +387,9 @@ Testcontainers sobe containers reais durante os testes:
 
 | Serviço | URL |
 |---------|-----|
-| user-service | http://localhost:8081/swagger-ui.html |
-| room-service | http://localhost:8082/swagger-ui.html |
-| booking-service | http://localhost:8083/swagger-ui.html |
+| user-service | http://localhost:8081/swagger-ui/index.html |
+| room-service | http://localhost:8082/swagger-ui/index.html |
+| booking-service | http://localhost:8083/swagger-ui/index.html |
 
 **Swagger UI — User Service:**
 
@@ -479,6 +479,14 @@ Push → Build → Testes unitários → Testes de integração (Docker) → Pac
 ### 1. Subir a infraestrutura
 
 ```bash
+# Observação: o MySQL não está definido no docker-compose deste repositório — suba um container MySQL antes
+docker run -d \
+  --name reserva_mysql \
+  -e MYSQL_ROOT_PASSWORD=root123 \
+  -p 3306:3306 \
+  mysql:8
+
+# Em seguida, suba os serviços dependentes (RabbitMQ, Kafka, etc.) com o docker-compose
 docker-compose up -d
 ```
 
@@ -499,7 +507,7 @@ cd booking-service && mvn spring-boot:run
 
 ### 3. Testar
 
-Via Swagger UI: http://localhost:8081/swagger-ui.html (ou 8082/8083)
+Via Swagger UI: http://localhost:8081/swagger-ui/index.html (ou 8082/8083)
 
 Via curl:
 
@@ -507,7 +515,7 @@ Via curl:
 # 1. Fazer login e obter o token JWT
 TOKEN=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@reserva.com","senha":"admin123"}' | jq -r '.token')
+  -d '{"email":"admin@reserva.com","senha":"admin123"}' | grep -o '"token":"[^" ]*"' | cut -d'"' -f4)
 
 # 2. Criar usuário (ADMIN)
 curl -X POST http://localhost:8081/api/v1/usuarios \
@@ -519,7 +527,9 @@ curl -X POST http://localhost:8081/api/v1/usuarios \
 curl -X POST http://localhost:8082/api/v1/salas \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"nome":"Sala A","capacidade":10,"ativa":true}'
+  -d '{"nome":"Sala A","capacidade":10,"ativa":false}'
+
+> **Atenção:** salas são criadas com `ativa: false` por padrão. É necessário um `PUT` para ativá-la antes de criar reservas.
 
 # 4. Criar reserva (USER ou ADMIN)
 curl -X POST http://localhost:8083/api/v1/reservas \
